@@ -216,11 +216,11 @@ class FirstLaunchAfterLoginFragment extends FragmentHelper with View.OnClickList
       case BackupError(reason) =>
         error(l"Unable to restore backup: $reason")
         spinnerController.showSpinner(false)
-        displayError(R.string.backup_import_error_unknown, R.string.backup_import_error_unknown)
+        displayError(R.string.backup_import_error_unknown_title, R.string.backup_import_error_unknown)
       case e =>
         println(s"Got error: ${e.getMessage}")
         spinnerController.showSpinner(false)
-        displayError(R.string.backup_import_error_unknown, R.string.backup_import_error_unknown)
+        displayError(R.string.backup_import_error_unknown_title, R.string.backup_import_error_unknown)
     }
   }
 
@@ -228,7 +228,7 @@ class FirstLaunchAfterLoginFragment extends FragmentHelper with View.OnClickList
     spinnerController.showDimmedSpinner(show = true, "")
     for {
       Some(accountManager) <- accountsService.createAccountManager(userId, isLogin = Some(true), dbFile = None)
-      _                    <- accountManager.addUnsplashPicture()
+      _                    =  accountManager.addUnsplashPicture()
       _                    <- accountsService.setAccount(Some(userId))
       registrationState    <- accountManager.getOrRegisterClient()
       _                    =  spinnerController.hideSpinner(Some(getString(R.string.back_up_progress_complete)))
