@@ -137,8 +137,15 @@ class CallingNotificationsController(implicit cxt: WireContext, eventContext: Ev
 
   private def cancelNots(nots: Seq[CallingNotificationsController.CallNotification]): Unit = {
     val notsIds = nots.map(_.id).toSet
-    val activeIds = notificationManager.getActiveNotifications.map(_.getId).toSet
-    val toCancel = Future.successful(activeIds -- notsIds)
+    val toCancel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      val activeIds = notificationManager.getActiveNotifications.map(_.getId).toSet
+      Future.successful(activeIds -- notsIds)
+    } else
+      for {
+        pref      <- currentNotificationsPref.head
+        activeIds <- pref.apply()
+        _         <-  pref := Set.empty[Int]
+      } yield activeIds -- notsIds
 
     toCancel.foreach(_.foreach(notificationManager.cancel(CallNotificationTag, _)))
   }
@@ -148,7 +155,12 @@ class CallingNotificationsController(implicit cxt: WireContext, eventContext: Ev
     nots.foreach { not =>
         val builder = androidNotificationBuilder(not)
 
-        def showNotification() = notificationManager.notify(CallNotificationTag, not.id, builder.build())
+        def showNotification() = {
+          if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            currentNotificationsPref.head.foreach(_.mutate(_ + not.id))
+          }
+          notificationManager.notify(CallNotificationTag, not.id, builder.build())
+        }
 
         Try(showNotification()).recover {
           case NonFatal(e) =>

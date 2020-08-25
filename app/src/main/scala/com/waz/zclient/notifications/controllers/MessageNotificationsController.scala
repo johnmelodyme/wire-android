@@ -53,7 +53,8 @@ import org.threeten.bp.Instant
 import scala.concurrent.Future
 import com.waz.threading.Threading._
 
-class MessageNotificationsController(applicationId: String = BuildConfig.APPLICATION_ID)
+class MessageNotificationsController(bundleEnabled: Boolean = Build.VERSION.SDK_INT > Build.VERSION_CODES.M,
+                                     applicationId: String = BuildConfig.APPLICATION_ID)
                                     (implicit inj: Injector, cxt: Context, eventContext: EventContext)
   extends Injectable
     with NotificationUiController
@@ -161,7 +162,7 @@ class MessageNotificationsController(applicationId: String = BuildConfig.APPLICA
 
   private def createSummaryNotificationProps(userId: UserId, nots: Set[NotificationData], teamName: Option[Name]) = {
     verbose(l"createSummaryNotificationProps: $userId, ${nots.size}")
-    if (nots.nonEmpty)
+    if (nots.nonEmpty && bundleEnabled)
       notificationColor(userId).map { color =>
         Some(NotificationProps (userId,
           when                     = Some(nots.minBy(_.time.instant).time.instant.toEpochMilli),
@@ -184,11 +185,14 @@ class MessageNotificationsController(applicationId: String = BuildConfig.APPLICA
       val (ephemeral, normal) = nots.toSeq.sortBy(_.time).partition(_.ephemeral)
 
       val groupedConvs =
+        if (bundleEnabled)
           normal.groupBy(_.conv).map {
             case (convId, ns) => toNotificationConvId(accountId, convId) -> ns
           } ++ ephemeral.groupBy(_.conv).map {
             case (convId, ns) => toEphemeralNotificationConvId(accountId, convId) -> ns
           }
+        else
+          Map(toNotificationGroupId(accountId) -> normal, toEphemeralNotificationGroupId(accountId) -> ephemeral)
 
       val teamNameOpt = if (groupedConvs.keys.size > 1) None else teamName
 
@@ -239,8 +243,8 @@ class MessageNotificationsController(applicationId: String = BuildConfig.APPLICA
   private def getOpenConvIntent(account: UserId, n: NotificationData, requestBase: Int) : Option[(UserId, ConvId, Int)] =
     if (n.isConvDeleted) None else Some((account, n.conv, requestBase))
 
-  private def getAction(account: UserId, n: NotificationData, requestBase: Int, offset: Int)=
-    if (n.isConvDeleted) None else Some((account, n.conv, requestBase + 1))
+  private def getAction(account: UserId, n: NotificationData, requestBase: Int, offset: Int, bundleEnabled: Boolean)=
+    if (n.isConvDeleted) None else Some((account, n.conv, requestBase + 1, bundleEnabled))
 
   private def singleNotificationProperties(props: NotificationProps, account: UserId, n: NotificationData, teamName: Option[Name]) = {
     verbose(l"singleNotificationProperties: $account, $n, $teamName")
@@ -262,8 +266,8 @@ class MessageNotificationsController(applicationId: String = BuildConfig.APPLICA
         specProps
       } else {
         specProps.copy(
-          action1 = getAction(account, n, requestBase, 1),
-          action2 = getAction(account, n, requestBase, 2)
+          action1 = getAction(account, n, requestBase, 1, bundleEnabled),
+          action2 = getAction(account, n, requestBase, 2, bundleEnabled)
         )
       }
     }
@@ -472,7 +476,7 @@ class MessageNotificationsController(applicationId: String = BuildConfig.APPLICA
           )
 
       val requestBase = System.currentTimeMillis.toInt
-      val inboxStyle  = StyleBuilder(StyleBuilder.Inbox, title = title, summaryText = (teamName).map(_.str), lines = messages)
+      val inboxStyle  = StyleBuilder(StyleBuilder.Inbox, title = title, summaryText = (if (bundleEnabled) teamName else None).map(_.str), lines = messages)
 
       val specProps = props.copy(
         contentTitle = Some(title),
@@ -484,8 +488,8 @@ class MessageNotificationsController(applicationId: String = BuildConfig.APPLICA
         specProps.copy(
           openConvIntent           = getOpenConvIntent(account, n, requestBase),
           clearNotificationsIntent = Some((account, Some(n.conv))),
-          action1                  = getAction(account, n, requestBase, 1),
-          action2                  = getAction(account, n, requestBase, 2)
+          action1                  = getAction(account, n, requestBase, 1, bundleEnabled),
+          action2                  = getAction(account, n, requestBase, 2, bundleEnabled)
         )
       else
         specProps.copy(

@@ -528,7 +528,12 @@ class MainActivity extends BaseActivity
       val check = new TextDrawing
 
       val missing = Emojis.getAllEmojisSortedByCategory.asScala.flatten.filter { emoji =>
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
           !paint.hasGlyph(emoji)
+        else {
+          check.set(emoji)
+          template == check
+        }
       }
 
       if (missing.nonEmpty) prefs.setUnsupportedEmoji(missing.asJava, Emojis.VERSION)
